@@ -184,30 +184,28 @@ impl NonStreamingProcessor {
     }
 
     /// 处理 Grounding 元数据 (Web Search 结果)
-    fn process_grounding(&mut self, grounding: &serde_json::Value) {
+    fn process_grounding(&mut self, grounding: &GroundingMetadata) {
         let mut grounding_text = String::new();
-        
+
         // 1. 处理搜索词
-        if let Some(queries) = grounding.get("webSearchQueries").and_then(|q| q.as_array()) {
-            let query_list: Vec<&str> = queries.iter().filter_map(|v| v.as_str()).collect();
-            if !query_list.is_empty() {
+        if let Some(queries) = &grounding.web_search_queries {
+            if !queries.is_empty() {
                 grounding_text.push_str("\n\n---\n**🔍 已为您搜索：** ");
-                grounding_text.push_str(&query_list.join(", "));
+                grounding_text.push_str(&queries.join(", "));
             }
         }
 
         // 2. 处理来源链接 (Chunks)
-        let chunks = grounding.get("groundingChunks").or_else(|| grounding.get("grounding_metadata").and_then(|m| m.get("groundingChunks")));
-        if let Some(chunks_arr) = chunks.and_then(|v| v.as_array()) {
+        if let Some(chunks) = &grounding.grounding_chunks {
             let mut links = Vec::new();
-            for (i, chunk) in chunks_arr.iter().enumerate() {
-                if let Some(web) = chunk.get("web") {
-                    let title = web.get("title").and_then(|v| v.as_str()).unwrap_or("网页来源");
-                    let uri = web.get("uri").and_then(|v| v.as_str()).unwrap_or("#");
+            for (i, chunk) in chunks.iter().enumerate() {
+                if let Some(web) = &chunk.web {
+                    let title = web.title.as_deref().unwrap_or("网页来源");
+                    let uri = web.uri.as_deref().unwrap_or("#");
                     links.push(format!("[{}] [{}]({})", i + 1, title, uri));
                 }
             }
-            
+
             if !links.is_empty() {
                 grounding_text.push_str("\n\n**🌐 来源引文：**\n");
                 grounding_text.push_str(&links.join("\n"));
