@@ -65,7 +65,7 @@ pub fn run() {
             });
             
             // 启动智能调度器
-            modules::scheduler::start_scheduler();
+            modules::scheduler::start_scheduler(app.handle().clone());
             
             Ok(())
         })

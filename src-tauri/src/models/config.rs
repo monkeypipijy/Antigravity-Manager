@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub auto_launch: bool,  // 开机自动启动
     #[serde(default)]
     pub scheduled_warmup: ScheduledWarmupConfig, // [NEW] 定时预热配置
+    #[serde(default)]
+    pub quota_protection: QuotaProtectionConfig, // [NEW] 配额保护配置
 }
 
 /// 定时预热配置
@@ -26,12 +28,26 @@ pub struct AppConfig {
 pub struct ScheduledWarmupConfig {
     /// 是否启用智能预热
     pub enabled: bool,
+
+    /// 预热的模型列表
+    #[serde(default = "default_warmup_models")]
+    pub monitored_models: Vec<String>,
+}
+
+fn default_warmup_models() -> Vec<String> {
+    vec![
+        "gemini-3-flash".to_string(),
+        "claude-sonnet-4-5".to_string(),
+        "gemini-3-pro-high".to_string(),
+        "gemini-3-pro-image".to_string(),
+    ]
 }
 
 impl ScheduledWarmupConfig {
     pub fn new() -> Self {
         Self {
             enabled: false,
+            monitored_models: default_warmup_models(),
         }
     }
 }
@@ -42,12 +58,46 @@ impl Default for ScheduledWarmupConfig {
     }
 }
 
+/// 配额保护配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotaProtectionConfig {
+    /// 是否启用配额保护
+    pub enabled: bool,
+    
+    /// 保留配额百分比 (1-99)
+    pub threshold_percentage: u32,
+
+    /// 监控的模型列表 (如 gemini-3-flash, gemini-3-pro-high, claude-sonnet-4-5)
+    #[serde(default = "default_monitored_models")]
+    pub monitored_models: Vec<String>,
+}
+
+fn default_monitored_models() -> Vec<String> {
+    vec!["claude-sonnet-4-5".to_string()]
+}
+
+impl QuotaProtectionConfig {
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            threshold_percentage: 10, // 默认保留10%
+            monitored_models: default_monitored_models(),
+        }
+    }
+}
+
+impl Default for QuotaProtectionConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppConfig {
     pub fn new() -> Self {
         Self {
             language: "zh".to_string(),
             theme: "system".to_string(),
-            auto_refresh: false,
+            auto_refresh: true,
             refresh_interval: 15,
             auto_sync: false,
             sync_interval: 5,
@@ -57,6 +107,7 @@ impl AppConfig {
             antigravity_args: None,
             auto_launch: false,
             scheduled_warmup: ScheduledWarmupConfig::default(),
+            quota_protection: QuotaProtectionConfig::default(),
         }
     }
 }

@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.20)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.22)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.20-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.22-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -183,18 +183,20 @@ print(response.choices[0].message.content)
 
 *   **版本演进 (Changelog)**:
     *   **v3.3.22 (2026-01-12)**:
-        - **智能预热系统 (Smart Warmup System)**:
-            - **100% 即时触发**: 自动监控所有模型，当额度恢复到 100% 时立即触发预热
-            - **零配置设计**: 只需一个总开关，无需手动配置任何时间参数或账号等级
-            - **智能去重机制**: 同一个 100% 周期只预热一次，额度消耗后自动清除历史，允许下次 100% 再预热
-            - **前端同步优化**: 调度器每 10 分钟扫描后自动同步最新配额数据到前端 UI
-            - **全账号覆盖**: 自动覆盖所有账号类型（Ultra/Pro/Free），无需区分等级
-            - **开箱即用**: 在"设置 → 账号设置 → 智能预热"中开启开关即可享受自动化守护
-        - **国际化完善 (i18n Improvements)**:
-            - 修复设置页面"自动检查更新"相关文本未翻译的问题 (Issue #550)
-            - 修复账号列表"设备指纹"按钮悬停提示未翻译的问题 (Issue #550)
-            - 新增 8 个翻译键,覆盖自动更新检查和设备指纹功能
-            - 确保英文界面下所有 UI 元素正确显示英文文本
+        - **智能预热系统全面升级 (Smart Warmup System 2.0)**:
+            - **100% 即时触发**: 实时监控额度，当模型配额恢复至 100% 时瞬间触发预热，确保账号随时处于高并发可用状态。
+            - **模型级自定义勾选**: 引入 `SmartWarmup.tsx` 组件，支持用户自由勾选预热范围（Flash/Pro/Sonnet/Image），实现精准预热。
+            - **智能去重机制**: 引入预热历史追踪，同一个 100% 周期内仅预热一次，避免请求冗余。
+            - **全账号覆盖**: 无视等级限制，自动适配 Ultra/Pro/Free 全类型账号。
+        - **配额保护系统增强 (Quota Protection Enhancement)**:
+            - **精准模型监控**: 支持核心模型独立监控逻辑。系统仅在用户勾选的关键模型（如 Claude）额度异常时触发锁定。
+            - **判定逻辑重构**: 升级为“选中模型配额最小值”判定法，显著提升锁定动作的及时性与安全性。
+            - **强制约束 UI**: 开启保护时默认锁定 Claude 模型，且强制要求开启期间至少保留一个监控项。
+        - **自动化联动流水线 (Automated Workflow)**:
+            - **全链路闭环**: 强制开启自动刷新。打通“刷新 -> 配额检查过程 -> 系统保护/解除锁定 -> 即时预热”的自动化全闭环。
+        - **国际化与稳定性**:
+            - 补全了“设备指纹”及“自动检查更新”在设置页面的 I18n 翻译缺失。
+            - 修复了高并发场景下调度器可能导致的异步所有权 Panic 问题。
     *   **v3.3.21 (2026-01-11)**:
         - **设备指纹绑定系统 (Device Fingerprint Binding) - 降低风控检测 (核心致谢 @jlcodes99 PR #523)**:
             - **账号设备绑定**: 实现账号与设备信息的一对一绑定关系，切换账号时自动切换对应的设备指纹。

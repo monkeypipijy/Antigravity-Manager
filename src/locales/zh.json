@@ -233,8 +233,9 @@
         },
         "account": {
             "title": "账号设置",
-            "auto_refresh": "自动刷新配额",
-            "auto_refresh_desc": "定期自动刷新所有账号的配额信息",
+            "auto_refresh": "后台自动刷新",
+            "auto_refresh_desc": "后台自动刷新所有账号的配额信息，这是额度保护和智能预热的基础。",
+            "always_on": "始终开启",
             "refresh_interval": "刷新间隔（分钟）",
             "auto_sync": "自动获取当前账号",
             "auto_sync_desc": "定期自动刷新当前活动账号的信息",
@@ -243,6 +244,17 @@
         "warmup": {
             "title": "智能预热",
             "desc": "自动监控所有模型，当额度恢复到 100% 时立即触发预热，保持模型热状态"
+        },
+        "quota_protection": {
+            "title": "配额保护",
+            "enable": "启用配额保护",
+            "enable_desc": "当账号剩余配额低于阈值时自动禁用反代功能，配额重置后将自动恢复账号",
+            "threshold_label": "保留配额百分比",
+            "monitored_models_label": "监控模型 (触发条件)",
+            "monitored_models_desc": "至少选择一个核心模型。任一勾选模型额度低于阈值将触发保护",
+            "range": "范围",
+            "example": "示例：设置 {{percentage}}% 时，{{total}} 次配额的账号剩余 ≤ {{threshold}} 次时将被自动禁用",
+            "auto_restore_info": "配额重置后将自动重新启用账号"
         },
         "proxy": {
             "title": "代理设置"

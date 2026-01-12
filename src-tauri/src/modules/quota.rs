@@ -319,21 +319,6 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
     let mut retry_count = 0;
     
     loop {
-        let config = crate::modules::config::load_app_config().unwrap_or_else(|_| crate::models::config::AppConfig {
-            language: "zh".to_string(),
-            theme: "system".to_string(),
-            auto_refresh: false,
-            refresh_interval: 15,
-            auto_sync: false,
-            sync_interval: 5,
-            default_export_path: None,
-            proxy: crate::proxy::ProxyConfig::default(),
-            antigravity_executable: None,
-            antigravity_args: None,
-            auto_launch: false,
-            scheduled_warmup: crate::models::config::ScheduledWarmupConfig::new(),
-        });
-
         let target_accounts = crate::modules::account::list_accounts().unwrap_or_default();
 
         if target_accounts.is_empty() {
@@ -394,7 +379,7 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
                 }
                 crate::modules::logger::log_info(&format!("[Warmup] 预热任务完成: 成功 {}/{}", success, total));
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                let _ = crate::commands::refresh_all_quotas().await;
+        let _ = crate::modules::account::refresh_all_quotas_logic().await;
             });
             return Ok(format!("已启动 {} 个模型的预热任务", total));
         }
@@ -451,7 +436,7 @@ pub async fn warm_up_account(account_id: &str) -> Result<String, String> {
             warmup_model_directly(&token, &name, &pid, &email, pct).await;
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
-        let _ = crate::commands::refresh_all_quotas().await;
+        let _ = crate::modules::account::refresh_all_quotas_logic().await;
     });
 
     Ok(format!("成功触发 {} 个系列的模型预热", warmed_count))

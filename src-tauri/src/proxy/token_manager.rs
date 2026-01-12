@@ -92,6 +92,28 @@ impl TokenManager {
         
         Ok(count)
     }
+
+    /// 重新加载指定账号（用于配额更新后的实时同步）
+    pub async fn reload_account(&self, account_id: &str) -> Result<(), String> {
+        let path = self.data_dir.join("accounts").join(format!("{}.json", account_id));
+        if !path.exists() {
+            return Err(format!("账号文件不存在: {:?}", path));
+        }
+
+        match self.load_single_account(&path).await {
+            Ok(Some(token)) => {
+                self.tokens.insert(account_id.to_string(), token);
+                Ok(())
+            }
+            Ok(None) => Err("账号加载失败".to_string()),
+            Err(e) => Err(format!("同步账号失败: {}", e)),
+        }
+    }
+
+    /// 重新加载所有账号
+    pub async fn reload_all_accounts(&self) -> Result<usize, String> {
+        self.load_accounts().await
+    }
     
     /// 加载单个账号
     async fn load_single_account(&self, path: &PathBuf) -> Result<Option<ProxyToken>, String> {
@@ -108,6 +130,17 @@ impl TokenManager {
         {
             tracing::debug!(
                 "Skipping disabled account file: {:?} (email={})",
+                path,
+                account.get("email").and_then(|v| v.as_str()).unwrap_or("<unknown>")
+            );
+            return Ok(None);
+        }
+
+        // 【新增】配额保护检查 - 在检查 proxy_disabled 之前执行
+        // 这样可以在加载时自动恢复配额已恢复的账号
+        if self.check_and_protect_quota(&account, path).await {
+            tracing::debug!(
+                "Account skipped due to quota protection: {:?} (email={})",
                 path,
                 account.get("email").and_then(|v| v.as_str()).unwrap_or("<unknown>")
             );
@@ -176,6 +209,176 @@ impl TokenManager {
             subscription_tier,
         }))
     }
+    
+    /// 检查账号是否应该被配额保护
+    /// 如果配额低于阈值，自动禁用账号并返回 true
+    async fn check_and_protect_quota(&self, account_json: &serde_json::Value, account_path: &PathBuf) -> bool {
+        // 1. 加载配额保护配置
+        let config = match crate::modules::config::load_app_config() {
+            Ok(cfg) => cfg.quota_protection,
+            Err(_) => return false, // 配置加载失败，跳过保护
+        };
+        
+        if !config.enabled {
+            return false; // 配额保护未启用
+        }
+        
+        // 2. 获取配额信息
+        let quota = match account_json.get("quota") {
+            Some(q) => q,
+            None => return false, // 无配额信息，跳过
+        };
+        
+        // 3. 检查是否已经被配额保护禁用
+        if account_json.get("proxy_disabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            if let Some(reason) = account_json.get("proxy_disabled_reason").and_then(|v| v.as_str()) {
+                if reason.contains("quota_protection") {
+                    // 已经被配额保护禁用，检查是否可以恢复
+                    return self.check_and_restore_quota(account_json, account_path, quota, &config).await;
+                }
+            }
+            return true; // 被其他原因禁用，跳过
+        }
+        
+        // 4. 计算总配额和剩余配额
+        let (total_quota, remaining_quota) = self.calculate_quota_stats(quota);
+        
+        if total_quota == 0 {
+            return false; // 无有效配额数据
+        }
+        
+        // 5. 计算阈值
+        let threshold = (total_quota as f64 * config.threshold_percentage as f64 / 100.0) as i32;
+        
+        // 6. 检查是否需要保护
+        if remaining_quota <= threshold {
+            tracing::warn!(
+                "配额保护触发: {} 剩余配额 {}/{} (阈值: {})",
+                account_json.get("email").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                remaining_quota,
+                total_quota,
+                threshold
+            );
+            
+            // 触发配额保护
+            let account_id = account_json.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let _ = self.trigger_quota_protection(account_id, account_path, remaining_quota, total_quota, threshold).await;
+            return true;
+        }
+        
+        false
+    }
+    
+    /// 计算账号的总配额和剩余配额
+    fn calculate_quota_stats(&self, quota: &serde_json::Value) -> (i32, i32) {
+        let models = match quota.get("models").and_then(|m| m.as_array()) {
+            Some(m) => m,
+            None => return (0, 0),
+        };
+        
+        let mut total = 0;
+        let mut remaining = 0;
+        
+        for model in models {
+            if let Some(limit) = model.get("limit").and_then(|v| v.as_i64()) {
+                total += limit as i32;
+            }
+            if let Some(rem) = model.get("remaining").and_then(|v| v.as_i64()) {
+                remaining += rem as i32;
+            }
+        }
+        
+        (total, remaining)
+    }
+    
+    /// 触发配额保护，禁用账号
+    async fn trigger_quota_protection(
+        &self,
+        account_id: &str,
+        account_path: &PathBuf,
+        remaining: i32,
+        total: i32,
+        threshold: i32,
+    ) -> Result<(), String> {
+        let mut content: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(account_path).map_err(|e| format!("读取文件失败: {}", e))?,
+        )
+        .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+        
+        let now = chrono::Utc::now().timestamp();
+        content["proxy_disabled"] = serde_json::Value::Bool(true);
+        content["proxy_disabled_at"] = serde_json::Value::Number(now.into());
+        content["proxy_disabled_reason"] = serde_json::Value::String(
+            format!("quota_protection: {}/{} (阈值: {})", remaining, total, threshold)
+        );
+        
+        std::fs::write(account_path, serde_json::to_string_pretty(&content).unwrap())
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+        
+        tracing::info!("账号 {} 已被配额保护自动禁用", account_id);
+        Ok(())
+    }
+    
+    /// 检查并恢复被配额保护禁用的账号
+    async fn check_and_restore_quota(
+        &self,
+        account_json: &serde_json::Value,
+        account_path: &PathBuf,
+        quota: &serde_json::Value,
+        config: &crate::models::QuotaProtectionConfig,
+    ) -> bool {
+        // 计算当前配额
+        let (total_quota, remaining_quota) = self.calculate_quota_stats(quota);
+        
+        if total_quota == 0 {
+            return true; // 无法判断，保持禁用状态
+        }
+        
+        let threshold = (total_quota as f64 * config.threshold_percentage as f64 / 100.0) as i32;
+        
+        // 如果配额已恢复到阈值以上，自动启用账号
+        if remaining_quota > threshold {
+            let account_id = account_json.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
+            tracing::info!(
+                "配额已恢复: {} 剩余配额 {}/{} (阈值: {}), 自动启用账号",
+                account_json.get("email").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                remaining_quota,
+                total_quota,
+                threshold
+            );
+            
+            let _ = self.restore_quota_protection(account_id, account_path).await;
+            return false; // 已恢复，可以使用
+        }
+        
+        true // 仍然低于阈值，保持禁用
+    }
+    
+    /// 恢复被配额保护禁用的账号
+    async fn restore_quota_protection(
+        &self,
+        account_id: &str,
+        account_path: &PathBuf,
+    ) -> Result<(), String> {
+        let mut content: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(account_path).map_err(|e| format!("读取文件失败: {}", e))?,
+        )
+        .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+        
+        content["proxy_disabled"] = serde_json::Value::Bool(false);
+        content["proxy_disabled_reason"] = serde_json::Value::Null;
+        content["proxy_disabled_at"] = serde_json::Value::Null;
+        
+        std::fs::write(account_path, serde_json::to_string_pretty(&content).unwrap())
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+        
+        tracing::info!("账号 {} 配额保护已自动恢复", account_id);
+        Ok(())
+    }
+
     
     /// 获取当前可用的 Token（支持粘性会话与智能调度）
     /// 参数 `quota_group` 用于区分 "claude" vs "gemini" 组

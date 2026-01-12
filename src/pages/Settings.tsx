@@ -6,8 +6,11 @@ import { useConfigStore } from '../stores/useConfigStore';
 import { AppConfig } from '../types/config';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
+import QuotaProtection from '../components/settings/QuotaProtection';
+import SmartWarmup from '../components/settings/SmartWarmup';
 
 import { useTranslation } from 'react-i18next';
+
 
 function Settings() {
     const { t } = useTranslation();
@@ -33,7 +36,13 @@ function Settings() {
             }
         },
         scheduled_warmup: {
-            enabled: false
+            enabled: false,
+            monitored_models: []
+        },
+        quota_protection: {
+            enabled: false,
+            threshold_percentage: 10,
+            monitored_models: []
         }
     });
 
@@ -86,7 +95,8 @@ function Settings() {
 
     const handleSave = async () => {
         try {
-            await saveConfig(formData);
+            // 强制开启后台自动刷新，确保联动逻辑生效
+            await saveConfig({ ...formData, auto_refresh: true });
             showToast(t('common.saved'), 'success');
         } catch (error) {
             showToast(`${t('common.error')}: ${error}`, 'error');
@@ -371,7 +381,7 @@ function Settings() {
                     {activeTab === 'account' && (
                         <div className="space-y-4 animate-in fade-in duration-500">
                             {/* 自动刷新配额 */}
-                            <div className="group bg-white dark:bg-base-100/50 rounded-2xl p-5 border border-gray-100 dark:border-base-300 hover:border-blue-200 transition-all duration-300 shadow-sm">
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-blue-200 transition-all duration-300 shadow-sm">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-300">
@@ -382,36 +392,29 @@ function Settings() {
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.account.auto_refresh_desc')}</p>
                                         </div>
                                     </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={formData.auto_refresh}
-                                            onChange={(e) => setFormData({ ...formData, auto_refresh: e.target.checked })}
-                                        />
-                                        <div className="w-11 h-6 bg-gray-200 dark:bg-base-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500 shadow-inner"></div>
-                                    </label>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider leading-none">{t('settings.account.always_on')}</span>
+                                    </div>
                                 </div>
 
-                                {formData.auto_refresh && (
-                                    <div className="mt-5 pt-5 border-t border-gray-50 dark:border-base-300 flex items-center gap-4 animate-in slide-in-from-top-1 duration-200">
-                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('settings.account.refresh_interval')}</label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                className="w-24 px-3 py-2 bg-gray-50 dark:bg-base-200 border border-gray-100 dark:border-base-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-600 dark:text-blue-400"
-                                                min="1"
-                                                max="60"
-                                                value={formData.refresh_interval}
-                                                onChange={(e) => setFormData({ ...formData, refresh_interval: parseInt(e.target.value) })}
-                                            />
-                                        </div>
+                                <div className="mt-5 pt-5 border-t border-gray-50 dark:border-base-300 flex items-center gap-4 animate-in slide-in-from-top-1 duration-200">
+                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('settings.account.refresh_interval')}</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            className="w-24 px-3 py-2 bg-gray-50 dark:bg-base-200 border border-gray-100 dark:border-base-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-600 dark:text-blue-400"
+                                            min="1"
+                                            max="60"
+                                            value={formData.refresh_interval}
+                                            onChange={(e) => setFormData({ ...formData, refresh_interval: parseInt(e.target.value) })}
+                                        />
                                     </div>
-                                )}
+                                </div>
                             </div>
 
                             {/* 自动获取当前账号 */}
-                            <div className="group bg-white dark:bg-base-100/50 rounded-2xl p-5 border border-gray-100 dark:border-base-300 hover:border-emerald-200 transition-all duration-300 shadow-sm">
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-emerald-200 transition-all duration-300 shadow-sm">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
@@ -449,32 +452,25 @@ function Settings() {
                             </div>
 
                             {/* 智能预热 (Smart Warmup) */}
-                            <div className="group bg-white dark:bg-base-100/50 rounded-2xl p-5 border border-gray-100 dark:border-base-300 hover:border-orange-200 transition-all duration-300 shadow-sm">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all duration-300">
-                                            <Sparkles size={20} />
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-gray-900 dark:text-gray-100">{t('settings.warmup.title', '智能预热')}</div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.warmup.desc')}</p>
-                                        </div>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={formData.scheduled_warmup?.enabled || false}
-                                            onChange={(e) => setFormData({
-                                                ...formData,
-                                                scheduled_warmup: {
-                                                    enabled: e.target.checked
-                                                }
-                                            })}
-                                        />
-                                        <div className="w-11 h-6 bg-gray-200 dark:bg-base-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500 shadow-inner"></div>
-                                    </label>
-                                </div>
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-orange-200 transition-all duration-300 shadow-sm">
+                                <SmartWarmup
+                                    config={formData.scheduled_warmup}
+                                    onChange={(newConfig) => setFormData({
+                                        ...formData,
+                                        scheduled_warmup: newConfig
+                                    })}
+                                />
+                            </div>
+
+                            {/* 配额保护 (Quota Protection) */}
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-rose-200 transition-all duration-300 shadow-sm">
+                                <QuotaProtection
+                                    config={formData.quota_protection}
+                                    onChange={(newConfig) => setFormData({
+                                        ...formData,
+                                        quota_protection: newConfig
+                                    })}
+                                />
                             </div>
                         </div>
                     )}
