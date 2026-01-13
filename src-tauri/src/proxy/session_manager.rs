@@ -9,7 +9,7 @@ pub struct SessionManager;
 impl SessionManager {
     /// 根据 Claude 请求生成稳定的会话指纹 (Session Fingerprint)
     /// 
-    /// 设计理念 (借鉴 Node.js antigravity-claude-proxy):
+    /// 设计理念:
     /// - 只哈希第一条用户消息内容,不混入模型名称或时间戳
     /// - 确保同一对话的所有轮次使用相同的 session_id
     /// - 最大化 prompt caching 的命中率
@@ -29,7 +29,6 @@ impl SessionManager {
         }
 
         // 2. 备选方案：基于第一条用户消息的 SHA256 哈希
-        // 借鉴 Node.js 版本的设计 (src/cloudcode/session-manager.js)
         let mut hasher = Sha256::new();
 
         let mut content_found = false;

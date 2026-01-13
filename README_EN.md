@@ -174,7 +174,7 @@ print(response.choices[0].message.content)
             - **Session Isolation Mechanism**: Generates stable session_id based on SHA256 hash of the first user message, ensuring all turns of the same conversation use the same session identifier.
             - **Smart Signature Recovery**: Automatically recovers thinking signatures in tool calls and multi-turn conversations, significantly reducing signature-related errors for thinking models.
             - **Priority Lookup Strategy**: Implements Session Cache → Tool Cache → Global Store three-layer lookup priority, maximizing signature recovery success rate.
-        - **Session ID Generation Optimization (Inspired by Node.js Proxy Design)**:
+        - **Session ID Generation Optimization**:
             - **Simple Design**: Only hashes the first user message content, without mixing model names or timestamps, ensuring session continuity.
             - **Perfect Continuity**: All turns of the same conversation (regardless of how many) use the same session_id, with no time limit.
             - **Performance Improvement**: Compared to previous solutions, CPU overhead reduced by 60%, code lines reduced by 20%.
